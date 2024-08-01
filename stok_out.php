@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html>
 <?php
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
+
 include "configuration/config_etc.php";
 include "configuration/config_include.php";
 etc();
@@ -102,12 +106,14 @@ if (!login_check()) {
 
           if (isset($_GET['barcode'])) {
             $barcode = mysqli_real_escape_string($conn, $_GET["barcode"]);
-            $sql1 = "SELECT * FROM barang where barcode='$barcode'";
+            $sql1 = "SELECT nama, kode, sisa, jumlah_masuk, a.barcode, a.id FROM barang_detil a, barang b where a.id_barang = b.sku AND a.barcode='$barcode'";
             $query = mysqli_query($conn, $sql1);
             $data = mysqli_fetch_assoc($query);
             $nama = $data['nama'];
-            $kode = $data['kode'];
+            $kode = $data['id'];
             $stok = $data['sisa'];
+            $bc = $data['barcode'];
+            $stok_detil = $data['jumlah_masuk'];
 
             $jumlah = '1';
           }
@@ -120,16 +126,18 @@ if (!login_check()) {
               $nota = mysqli_real_escape_string($conn, $_POST["nota"]);
               $kode = mysqli_real_escape_string($conn, $_POST["kode"]);
               $nama = mysqli_real_escape_string($conn, $_POST["nama"]);
+              $bc = mysqli_real_escape_string($conn, $_POST["bc"]);
               $hbeli = mysqli_real_escape_string($conn, $_POST["hargabeli"]);
               $hjual = mysqli_real_escape_string($conn, $_POST["hargajual"]);
               $jumlah = mysqli_real_escape_string($conn, $_POST["jumlah"]);
               $stok = mysqli_real_escape_string($conn, $_POST["stok"]);
+              $stok_detil = mysqli_real_escape_string($conn, $_POST["stok_detil"]);
 
               $kegiatan = "Stok Keluar";
               $status = "pending";
               $usr = $_SESSION['nama'];
               $today = date('Y-m-d');
-              if ($jumlah <= $stok) {
+              if ($jumlah <= $stok && $jumlah <= $stok_detil) {
 
                 // $brg = mysqli_query($conn, "SELECT * FROM barang WHERE kode='$kode'");
                 // $ass = mysqli_fetch_assoc($brg);
@@ -168,15 +176,15 @@ if (!login_check()) {
                   }
                 } else {
 
-                  $total = $jumlah * $hjual;
-                  $modal = $jumlah * $hbeli;
+                  $total = (int)$jumlah * (int)$hjual;
+                  $modal = (int)$jumlah * (int)$hbeli;
 
-                  $sql2 = "insert into stok_keluar_daftar values( '$nota','$kode','$nama','$jumlah','$modal','$total', 0)";
+                  $sql2 = "insert into stok_keluar_daftar values( '$nota','$kode','$nama','$bc','$jumlah','$modal','$total', 0)";
                   $insertan = mysqli_query($conn, $sql2);
 
                   if ($insertan) {
 
-                    $sql9 = "INSERT INTO mutasi VALUES('$usr','$today','$kode','$newstok','$jumlah','stok keluar','$nota','','pending')";
+                    $sql9 = "INSERT INTO mutasi VALUES('$usr','$today','$kode', 0,$jumlah,'stok keluar','$nota',0,'pending')";
                     $mutasi = mysqli_query($conn, $sql9);
 
 
@@ -236,43 +244,74 @@ if (!login_check()) {
                 <div class="box-body">
 
                   <body OnLoad='document.getElementById("barcode").focus();'>
-                    <form method="get" action="">
-                      <div class="row">
-                        <div class="form-group col-md-12 col-xs-12">
-                          <label for="barang" class="col-sm-2 control-label">Barcode:</label>
-                          <div class="col-sm-8">
-                            <input type="text" class="form-control" id="barcode" name="barcode">
-                          </div>
-                          <div class="col-sm-2">
-                            <b>atau</b>
-                          </div>
-                        </div>
-                      </div>
-                    </form>
 
-                    <div class="row">
-                      <div class="form-group col-md-12 col-xs-12">
-                        <label for="barang" class="col-sm-2 control-label">Pilih Barang:</label>
-                        <div class="col-sm-10">
-                          <select class="form-control select2" style="width: 100%;" name="produk" id="produk">
-                            <option selected="selected"> Pilih Barang</option>
-                            <?php
-                            error_reporting(E_ALL ^ (E_NOTICE | E_WARNING));
-                            $sql = mysqli_query($conn, "select *,barang.nama as nama, barang.kode as kode, barang.sku as sku from barang");
-                            while ($row = mysqli_fetch_assoc($sql)) {
-                              if ($barcode == $row['barcode'])
-                                echo "<option value='" . $row['kode'] . "' nama='" . $row['nama'] . "' hargabeli='" . $row['hargabeli'] . "' hargajual='" . $row['hargajual'] . "' kode='" . $row['kode'] . "' stok='" . $row['sisa'] . "' selected='selected'>" . $row['sku'] . " | " . $row['nama'] . "</option>";
-                              else
-                                echo "<option value='" . $row['kode'] . "' nama='" . $row['nama'] . "' hargabeli='" . $row['hargabeli'] . "' hargajual='" . $row['hargajual'] . "' kode='" . $row['kode'] . "' stok='" . $row['sisa'] . "' >" . $row['sku'] . " | " . $row['nama'] . "</option>";
-                            }
-                            ?>
-                          </select>
+                    <div class="nav-tabs-custom nav-fill">
+                      <ul class="nav nav-tabs">
+                        <li class="active"><a href="#tab_1" data-toggle="tab">Barcode</a></li>
+                        <li><a href="#tab_2" data-toggle="tab">Pilih Barang</a></li>
+                      </ul>
+                      <div class="tab-content">
+                        <div class="tab-pane active" id="tab_1">
+                          <div class="row">
+                            <div class="col-sm-6">
+                              <button class="btn btn-info btn-block" type="button" id="startButton">Open Kamera</button>
+                            </div>
+                            <div class="col-sm-6">
+                              <button class="btn btn-info btn-block" type="button" id="resetButton">Reset</button>
+                            </div>
+                          </div>
+                          <br>
+                          <div>
+                            <video id="video" width="100%" height="200" style="border: 1px solid gray"></video>
+                          </div>
+
+                          <div id="sourceSelectPanel" style="display:none">
+                            <label for="sourceSelect">Ubah kamera:</label>
+                            <select id="sourceSelect" style="max-width:400px">
+                            </select>
+                          </div>
+                          <br>
+                          <form method="get" action="">
+                            <div class="row">
+                              <div class="form-group col-md-12 col-xs-12">
+                                <label for="barang" class="col-sm-2 control-label">Barcode:</label>
+                                <div class="col-sm-8">
+                                  <input type="text" class="form-control" id="barcode" name="barcode">
+                                </div>
+                                <div class="col-sm-2">
+                                  <button type="submit" class="btn btn-info btn-block">Cari</button>
+                                </div>
+                              </div>
+                            </div>
+                          </form>
                         </div>
+                        <!-- /.tab-pane -->
+                        <div class="tab-pane" id="tab_2">
+                          <div class="row">
+                            <div class="form-group col-md-12 col-xs-12">
+                              <label for="barang" class="col-sm-2 control-label">Pilih Barang:</label>
+                              <div class="col-sm-10">
+                                <select class="form-control select2" style="width: 100%;" name="produk" id="produk">
+                                  <option selected="selected"> Pilih Barang</option>
+                                  <?php
+                                  error_reporting(E_ALL ^ (E_NOTICE | E_WARNING));
+                                  $sql = mysqli_query($conn, "select a.kode, a.nama, a.hargabeli, a.hargajual, a.sisa, a.sku, b.barcode, b.jumlah_masuk, b.id from barang a, barang_detil b WHERE a.sku = b.id_barang;");
+                                  while ($row = mysqli_fetch_assoc($sql)) {
+                                    if ($barcode == $row['barcode'])
+                                      echo "<option value='" . $row['kode'] . "' nama='" . $row['nama'] . "' hargabeli='" . $row['hargabeli'] . "' hargajual='" . $row['hargajual'] . "' kode='" . $row['id'] . "' stok='" . $row['sisa'] . "' jumlah_masuk='" . $row['jumlah_masuk'] . "' bc='" . $row['barcode'] . "' selected='selected'>" . $row['sku'] . " | " . $row['nama'] . " | " . $row['barcode'] . "</option>";
+                                    else
+                                      echo "<option value='" . $row['kode'] . "' nama='" . $row['nama'] . "' hargabeli='" . $row['hargabeli'] . "' hargajual='" . $row['hargajual'] . "' kode='" . $row['id'] . "' stok='" . $row['sisa'] . "' jumlah_masuk='" . $row['jumlah_masuk'] . "' bc='" . $row['barcode'] . "'>" . $row['sku'] . " | " . $row['nama'] . " | " . $row['barcode'] . "</option>";
+                                  }
+                                  ?>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <!-- /.tab-pane -->
                       </div>
+                      <!-- /.tab-content -->
                     </div>
-
-
-
 
                     <form method="post" action="">
                       <div class="row">
@@ -280,9 +319,9 @@ if (!login_check()) {
                           <label for="barang" class="col-sm-2 control-label">Nama Produk:</label>
                           <div class="col-sm-10">
                             <input type="text" class="form-control" readonly id="nama" name="nama" value="<?php echo $nama; ?>">
-                            <input type="hidden" class="form-control" readonly id="kode" name="kode" value="<?php echo $kode; ?>">
-                            <input type="text" class="form-control" readonly id="nota" name="nota" value="<?php echo autoNumber(); ?>">
-
+                            <input type="text" class="form-control" readonly id="kode" name="kode" value="<?php echo $kode; ?>">
+                            <input type="text" hidden class="form-control" readonly id="nota" name="nota" value="<?php echo autoNumber(); ?>">
+                            <input type="hidden" class="form-control" readonly id="bc" name="bc" value="<?php echo $bc; ?>">
                           </div>
 
                         </div>
@@ -300,7 +339,14 @@ if (!login_check()) {
                             <input type="hidden" class="form-control" id="hbeli" name="hargabeli" value="<?php echo $hbeli; ?>" readonly>
                             <input type="hidden" class="form-control" id="hjual" name="hargajual" value="<?php echo $hjual; ?>" readonly>
                           </div>
-
+                        </div>
+                      </div>
+                      <div class="row">
+                        <div class="form-group col-md-12 col-xs-12">
+                          <label for="barang" class="col-sm-2 control-label">Stok Detil:</label>
+                          <div class="col-sm-5">
+                            <input type="text" class="form-control" id="stok_detil" name="stok_detil" value="<?php echo $stok_detil; ?>" readonly>
+                          </div>
                         </div>
                       </div>
 
@@ -376,6 +422,7 @@ if (!login_check()) {
                               <tr>
                                 <th style="width:10px">No</th>
                                 <th>Nama Barang</th>
+                                <th>Barcode Barang</th>
                                 <th style="width:10%">Jumlah Keluar</th>
 
                                 <?php if ($chmod >= 3 || $_SESSION['jabatan'] == 'admin') { ?>
@@ -389,6 +436,14 @@ if (!login_check()) {
                             while (($count < $rpp) && ($i < $tcount)) {
                               mysqli_data_seek($result, $i);
                               $fill = mysqli_fetch_array($result);
+
+                              if (isset($fill['barcode'])) {
+                                $escaped_barcode = mysqli_real_escape_string($conn, $fill['barcode']);
+                                $barc = $escaped_barcode;
+                              } else {
+                                // Tindakan alternatif jika $fill['barcode'] tidak terdefinisi atau null
+                                $barc = '-';
+                              }
                             ?>
                               <tbody>
                                 <tr>
@@ -396,6 +451,7 @@ if (!login_check()) {
 
 
                                   <td><?php echo mysqli_real_escape_string($conn, $fill['nama']); ?></td>
+                                  <td><?php echo $barc; ?></td>
 
                                   <td><?php echo mysqli_real_escape_string($conn, $fill['jumlah']); ?></td>
 
@@ -579,8 +635,7 @@ if (!login_check()) {
 <script src="dist/plugins/jQuery/jquery-2.2.3.min.js"></script>
 <script src="libs/1.11.4-jquery-ui.min.js"></script>
 
-
-
+<script type="text/javascript" src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
 
 
 <script>
@@ -591,6 +646,8 @@ if (!login_check()) {
     var stok = $("#produk option:selected").attr("stok");
     var hbeli = $("#produk option:selected").attr("hargabeli");
     var hjual = $("#produk option:selected").attr("hargajual");
+    var jumlah_masuk = $("#produk option:selected").attr("jumlah_masuk");
+    var bc = $("#produk option:selected").attr("bc");
 
 
     $("#nama").val(nama);
@@ -598,8 +655,63 @@ if (!login_check()) {
     $("#stok").val(stok);
     $("#hbeli").val(hbeli);
     $("#hjual").val(hjual);
+    $("#stok_detil").val(jumlah_masuk);
+    $("#bc").val(bc);
     $("#jumlah").val(1);
   });
+
+  window.addEventListener('load', function() {
+    let selectedDeviceId;
+    const codeReader = new ZXing.BrowserMultiFormatReader()
+    console.log('ZXing code reader initialized')
+    codeReader.listVideoInputDevices()
+      .then((videoInputDevices) => {
+        const sourceSelect = document.getElementById('sourceSelect')
+        selectedDeviceId = videoInputDevices[0].deviceId
+        if (videoInputDevices.length >= 1) {
+          videoInputDevices.forEach((element) => {
+            const sourceOption = document.createElement('option')
+            sourceOption.text = element.label
+            sourceOption.value = element.deviceId
+            sourceSelect.appendChild(sourceOption)
+          })
+
+          sourceSelect.onchange = () => {
+            selectedDeviceId = sourceSelect.value;
+          };
+
+          const sourceSelectPanel = document.getElementById('sourceSelectPanel')
+          sourceSelectPanel.style.display = 'block'
+        }
+
+        document.getElementById('startButton').addEventListener('click', () => {
+          codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+            if (result) {
+              console.log(result)
+              $('#barcode').val(result.text);
+              // document.getElementById('result').textContent = result.text
+            }
+            if (err && !(err instanceof ZXing.NotFoundException)) {
+              console.error(err)
+              // $('#result').val();
+              // document.getElementById('result').textContent = err
+            }
+          })
+          console.log(`Started continous decode from camera with id ${selectedDeviceId}`)
+        })
+
+        document.getElementById('resetButton').addEventListener('click', () => {
+          codeReader.reset()
+          $('#barcode').val('');
+          // document.getElementById('result').textContent = '';
+          console.log('Reset.')
+        })
+
+      })
+      .catch((err) => {
+        console.error(err)
+      })
+  })
 </script>
 
 

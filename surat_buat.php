@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html>
 <?php
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
+
 include "configuration/config_etc.php";
 include "configuration/config_include.php";
 etc();
@@ -134,7 +138,7 @@ if (!login_check()) {
                     <div class="form-group">
                       <label>Pilih Tujuan</label>
                       <select class="form-control select2" style="width: 100%;" name="pilih" id="pilih">
-                        <option selected="selected">Pilih Pelanggan</option>
+                        <option selected="selected" value="">Pilih Pelanggan</option>
                         <?php
                         error_reporting(E_ALL ^ (E_NOTICE | E_WARNING));
                         $sql = mysqli_query($conn, "select * from pelanggan");
@@ -235,6 +239,7 @@ if (!login_check()) {
                       <tr>
                         <th style="width:10px">No</th>
                         <th>Nama Barang</th>
+                        <th>Barcode Barang</th>
                         <th style="width:10%">Jumlah </th>
 
 
@@ -245,16 +250,21 @@ if (!login_check()) {
                     while (($count < $rpp) && ($i < $tcount)) {
                       mysqli_data_seek($result, $i);
                       $fill = mysqli_fetch_array($result);
+
+                      if (isset($fill['barcode'])) {
+                        $escaped_barcode = mysqli_real_escape_string($conn, $fill['barcode']);
+                        $barc = $escaped_barcode;
+                      } else {
+                        // Tindakan alternatif jika $fill['barcode'] tidak terdefinisi atau null
+                        $barc = '-';
+                      }
                     ?>
                       <tbody>
                         <tr>
                           <td><?php echo ++$no_urut; ?></td>
-
-
                           <td><?php echo mysqli_real_escape_string($conn, $fill['nama']); ?></td>
-
+                          <td><?php echo $barc; ?></td>
                           <td><?php echo mysqli_real_escape_string($conn, $fill['jumlah']); ?></td>
-
                         </tr>
                       <?php
                       $i++;
@@ -265,9 +275,6 @@ if (!login_check()) {
                       </tbody>
                   </table>
                   <br>
-
-
-
                   <!-- /.box-body -->
                 </div>
               </div>
